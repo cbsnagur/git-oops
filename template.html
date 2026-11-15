@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Git Oops</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*BASE*/
+.bench { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
+@media (max-width: 920px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.search { font: 16px var(--font-body); padding: 12px; }
+.vars { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 10px; align-items: center; padding: 12px; font-size: 13px; }
+.vars label { color: var(--muted); }
+.vars input { width: 100%; }
+.toggle { display: flex; gap: 10px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+.toggle input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); }
+.toggle b { display: block; font-weight: 600; }
+.toggle span { font-size: 13px; color: var(--muted); }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.legend li { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.risk { font: 600 12px/1 var(--font-body); padding: 4px 8px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; justify-self: start; }
+.risk.safe { color: var(--good); } .risk.rewrite { color: var(--warn); } .risk.destroy { color: var(--bad); }
+.count { font-size: 13px; color: var(--muted); margin: 0; }
+.count strong { color: var(--ink); }
+.grouphead { font: 600 12px/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 10px 0 0; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; counter-reset: step; }
+.steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; counter-increment: step; }
+.steps li::before { content: counter(step); font: 600 12px/22px var(--font-body); width: 22px; height: 22px; text-align: center; border-radius: 50%; background: var(--accent-soft); color: var(--ink); margin-top: 6px; }
+.cmd { display: flex; align-items: center; gap: 8px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 6px 6px 6px 10px; }
+.cmd code { flex: 1 1 auto; min-width: 0; font: 500 13px/1.5 var(--font-mono); overflow-x: auto; white-space: pre; }
+.why { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
+.variant { font-size: 13px; color: var(--muted); margin: 0; }
+.variant strong { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <h1 class="mark"><span>Git Oops</span></h1>
+    <p class="tag">Say what went wrong in git. Get the exact commands to undo it, filled in with your branch and file names, and a plain warning about what each one costs.</p>
+    <p class="private">Runs in this tab. Nothing is sent anywhere.</p>
+  </header>
+  <main class="bench">
+    <section class="col sticky" aria-label="Your situation">
+      <div class="field">
+        <div class="field-head"><label for="q" class="grow">What happened?</label><button class="ghost" id="clear" type="button">Clear</button></div>
+        <input class="line-input search" id="q" type="search" autocomplete="off" spellcheck="false" placeholder="committed to the wrong branch">
+      </div>
+      <div class="try" id="try"><b>Common:</b></div>
+      <label class="toggle" for="pushed">
+        <input type="checkbox" id="pushed">
+        <span><b>I already pushed it</b>Switches to commands that are safe for shared history wherever that changes the answer.</span>
+      </label>
+      <div class="field">
+        <div class="field-head"><span class="name grow">Your names</span><span>filled into every command</span></div>
+        <div class="vars">
+          <label for="v-branch">Branch</label><input class="text-input" id="v-branch" data-var="branch" spellcheck="false" autocomplete="off">
+          <label for="v-remote">Remote</label><input class="text-input" id="v-remote" data-var="remote" spellcheck="false" autocomplete="off">
+          <label for="v-file">File</label><input class="text-input" id="v-file" data-var="file" spellcheck="false" autocomplete="off">
+          <label for="v-commit">Commit</label><input class="text-input" id="v-commit" data-var="commit" spellcheck="false" autocomplete="off">
+          <label for="v-n">How many commits</label><input class="text-input" id="v-n" data-var="n" inputmode="numeric" autocomplete="off">
+          <label for="v-msg">Message</label><input class="text-input" id="v-msg" data-var="msg" autocomplete="off">
+        </div>
+      </div>
+      <ul class="legend" aria-label="What the risk labels mean">
+        <li><span class="risk safe">Safe</span><span>Nothing is lost. You can undo the undo.</span></li>
+        <li><span class="risk rewrite">Rewrites history</span><span>Fine on your own branch. On a shared one, teammates must recover.</span></li>
+        <li><span class="risk destroy">Destroys work</span><span>Uncommitted changes are deleted and git cannot bring them back.</span></li>
+      </ul>
+    </section>
+    <section class="col" aria-label="Fixes">
+      <p class="count" id="count" role="status" aria-live="polite"></p>
+      <div class="col" id="list"></div>
+    </section>
+  </main>
+</div>
+<script>
+/*COMMON*/
+</script>
+<script>
+/*ENGINE*/
+</script>
+<script>
+(function () {
+'use strict';
+const $ = id => document.getElementById(id);
+const q = $('q'), list = $('list'), count = $('count'), pushed = $('pushed');
+const RISK = { safe: 'Safe', rewrite: 'Rewrites history', destroy: 'Destroys work' };
+const varInputs = Array.from(document.querySelectorAll('[data-var]'));
+varInputs.forEach(i => { i.value = GitOops.DEFAULTS[i.dataset.var]; });
+let timer = null;
+
+function vars() { const v = {}; varInputs.forEach(i => { v[i.dataset.var] = i.value; }); if (!/^[1-9]\d*$/.test(v.n.trim())) v.n = '1'; return v; }
+
+function card(r) {
+  const a = el('article', 'card');
+  const head = el('div', 'card-head');
+  head.appendChild(el('span', 'risk ' + r.risk, RISK[r.risk]));
+  head.appendChild(el('h2', 'sum', r.title));
+  a.appendChild(head);
+  if (r.usingPushed) { const p = el('p', 'variant'); p.appendChild(el('strong', '', 'Already-pushed version. ')); p.appendChild(document.createTextNode('These commands avoid surprising anyone who has pulled.')); a.appendChild(p); }
+  const ol = el('ol', 'steps');
+  for (const s of r.steps) {
+    const li = el('li'), body = el('div'), row = el('div', 'cmd');
+    const code = el('code', '', s.cmd); code.tabIndex = 0;
+    row.appendChild(code); row.appendChild(copyBtn(s.cmd, 'command'));
+    body.appendChild(row); body.appendChild(el('p', 'why', s.why));
+    li.appendChild(body); ol.appendChild(li);
+  }
+  a.appendChild(ol);
+  if (r.note) {
+    const ul = el('ul', 'notes'), li = el('li', 'note ' + (r.risk === 'destroy' ? 'bad' : r.risk === 'rewrite' ? 'warn' : 'info'));
+    li.appendChild(el('b', '', r.risk === 'safe' ? 'Note' : 'Careful')); li.appendChild(el('span', '', r.note));
+    ul.appendChild(li); a.appendChild(ul);
+  }
+  return a;
+}
+
+function render() {
+  const idx = GitOops.search(q.value), v = vars(), isPushed = pushed.checked;
+  list.textContent = '';
+  const searching = q.value.trim() !== '';
+  if (!idx.length) {
+    count.textContent = '';
+    const e = el('div', 'empty');
+    e.appendChild(el('h2', '', 'No fix matches those words'));
+    e.appendChild(el('p', '', 'Try fewer or different words, such as "undo commit", "wrong branch", "lost stash" or "force push". Clear the box to browse all ' + GitOops.scenarios.length + ' situations.'));
+    list.appendChild(e);
+    return;
+  }
+  count.textContent = '';
+  count.appendChild(el('strong', '', searching ? idx.length + (idx.length === 1 ? ' fix' : ' fixes') : 'All ' + idx.length + ' situations'));
+  count.appendChild(document.createTextNode(searching ? ', best match first' : ', grouped by area'));
+  let lastGroup = null;
+  idx.slice(0, searching ? 12 : idx.length).forEach(i => {
+    const s = GitOops.scenarios[i];
+    if (!searching && s.g !== lastGroup) { list.appendChild(el('h2', 'grouphead', s.g)); lastGroup = s.g; }
+    list.appendChild(card(GitOops.resolve(s, v, isPushed)));
+  });
+}
+function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
+q.addEventListener('input', schedule);
+pushed.addEventListener('change', render);
+varInputs.forEach(i => i.addEventListener('input', schedule));
+$('clear').addEventListener('click', () => { q.value = ''; render(); q.focus(); });
+[['Wrong branch', 'committed on the wrong branch'], ['Undo commit', 'undo last commit'], ['Lost work', 'lost commits reset hard'], ['Bad merge', 'undo merge'], ['Leaked secret', 'committed a password'], ['Push rejected', 'push rejected']].forEach(([name, text]) => {
+  const b = el('button', 'chip', name); b.type = 'button';
+  b.addEventListener('click', () => { q.value = text; render(); });
+  $('try').appendChild(b);
+});
+q.value = 'committed on the wrong branch';
+render();
+})();
+</script>
+</body>
+</html>
